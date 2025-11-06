@@ -4,7 +4,17 @@ import aiCommentsRoutes from "./routes/ai-comments.js";
 import { config } from "./config/config.js";
 
 const app = Fastify({
-  logger: true, // logs all requests
+  // logger: true, // logs all requests
+  logger: {
+    transport: {
+      target: "pino-pretty",
+      options: {
+        translateTime: "HH:MM:ss Z",
+        ignore: "pid,hostname",
+        colorize: true,
+      },
+    },
+  },
 });
 
 const api_v1 = "/api/v1";
