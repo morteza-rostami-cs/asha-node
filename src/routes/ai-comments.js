@@ -44,13 +44,9 @@ export default async function aiCommentsRoutes(fastify, options) {
     return { message: "AI Comments route is working ✅" };
   });
 
-  fastify.post("/comment-analysis", async (request, reply) => {
+  fastify.post("/reply", async (request, reply) => {
     try {
       // data
-      console.log("=====================================");
-      fastify.log.info("$$$$$$$$$$$$$$$$$$$$$==============");
-
-      // const { comment, thread } = request.body;
 
       const comment = request.body?.comment;
       const thread = request.body?.thread;
@@ -62,33 +58,37 @@ export default async function aiCommentsRoutes(fastify, options) {
       }
 
       const schema = z.object({
-        sentiment: z.enum(["positive", "neutral", "negative"]),
-        title: z.string(),
         reply: z.string(),
+        tone: z.enum(["helpful", "funny", "professional"]).optional(),
+        reasoning: z.string().optional(), // optional insight for debugging or moderation
       });
 
       const promptTemplate = `
-      You are an AI that analyzes user comments in a discussion thread.  
-      Given the current comment and its thread, return sentiment, title, and reply.
+      You are an AI assistant that helps reply to comments in an online discussion.
 
-      Thread:
+      Your task:
+      - Read the entire discussion thread for context.
+      - Understand the tone of the thread (friendly, frustrated, joking, etc.).
+      - Then craft a thoughtful, natural reply to the **latest comment**, as if continuing the conversation.
+
+      Rules:
+      1. The reply must be in a human, conversational style — no robotic tone.
+      2. If the comment is rude or negative, respond politely and try to de-escalate.
+      3. Keep your reply under 80 words.
+      4. Do NOT include any markdown, emojis, or formatting — plain text only.
+      5. Return ONLY a JSON object matching the schema below.
+
+      Example JSON:
+      {{
+        "reply": "Thanks for your feedback! I'll look into improving the plugin performance.",
+        "tone": "helpful"
+      }}
+
+      Thread so far:
       {thread}
 
-      Current Comment:
-      {comment}
-
-      Please provide the output **only as a JSON object** with the following fields:
-      - "sentiment": a value of "positive", "neutral", or "negative"
-      - "title": a short string summarizing the comment
-      - "reply": a friendly AI-generated reply that fits the thread tone.
-
-      Your output should match the schema below (but **DO NOT include the schema in the output**):
-
-      {{
-        "sentiment": "positive",
-        "title": "Great feedback!",
-        "reply": "Thank you for your feedback!"
-      }}
+      User's latest comment:
+      "{comment}"
       `;
 
       const aiResponse = await llmStructuredTask({
@@ -106,8 +106,8 @@ export default async function aiCommentsRoutes(fastify, options) {
       // res.json({ success: true, ai: aiResponse });
       reply.code(200).send({ success: true, ai: aiResponse });
     } catch (err) {
-      console.error(`‼️ai analysis error: ‼️`, err);
-      reply.code(500).send({ error: "ai analysis failed" });
+      console.error(`‼️ai reply generation error: ‼️`, err);
+      reply.code(500).send({ error: "ai reply generation failed" });
     }
   });
 
@@ -126,19 +126,25 @@ export default async function aiCommentsRoutes(fastify, options) {
       const schema = z.object({
         approved: z.boolean(),
         reason: z.string(),
+        sentiment: z.enum(["positive", "negative", "neutral"]),
+        title: z.string(),
       });
 
       // , relevant, or constructive irrelevant/
       const promptTemplate = `
-      You are a WordPress AI moderator. 
-      Your job is to decide if a comment should be APPROVED or REJECTED.
+      You are a WordPress AI moderator and analyzer.
+
+      Your tasks:
+      1. Decide if the comment should be APPROVED or REJECTED.
+      2. Analyze the sentiment of the comment: "positive", "negative", or "neutral".
+      3. Generate a short human-readable TITLE (max 6 words) summarizing the comment.
 
       Rules:
-      1. Approve if the comment is polite.
-      2. Reject if it contains hate, spam, insults, or offensive text.
-      3. Reply ONLY in the specified JSON format.
+      - Approve if the comment is polite, relevant, or constructive.
+      - Reject if it contains hate, spam, insults, or offensive language.
+      - Title should sound natural and related to the comment tone.
+      - Respond ONLY in the exact JSON format.
 
-      {format_instructions}
 
       Comment:
       "{comment}"
