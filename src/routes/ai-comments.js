@@ -111,14 +111,56 @@ export default async function aiCommentsRoutes(fastify, options) {
     }
   });
 
-  fastify.post("/", async (request, reply) => {
-    const { comment } = request.body;
+  // { "approved": true, "reason": "Polite and constructive feedback." }
 
-    // In future: analyze sentiment, auto-reply, etc.
-    return {
-      status: "ok",
-      received: comment,
-      ai_reply: `AI would respond to: "${comment}"`,
-    };
+  // POST /ai-comments/moderate
+  fastify.post("/moderate", async (request, reply) => {
+    try {
+      // data
+      const comment = request.body?.comment;
+
+      if (!comment) {
+        return reply.status(400).json({ error: "comment is required." });
+      }
+
+      const schema = z.object({
+        approved: z.boolean(),
+        reason: z.string(),
+      });
+
+      // , relevant, or constructive irrelevant/
+      const promptTemplate = `
+      You are a WordPress AI moderator. 
+      Your job is to decide if a comment should be APPROVED or REJECTED.
+
+      Rules:
+      1. Approve if the comment is polite.
+      2. Reject if it contains hate, spam, insults, or offensive text.
+      3. Reply ONLY in the specified JSON format.
+
+      {format_instructions}
+
+      Comment:
+      "{comment}"
+      `;
+
+      const aiResponse = await llmStructuredTask({
+        promptTemplate,
+        inputData: { comment },
+        schema,
+        modelOptions: {
+          model: "gemma2:2b",
+          baseUrl: "http://localhost:11434",
+          temperature: 0.8,
+          maxRetries: 3,
+        },
+      });
+
+      // res.json({ success: true, ai: aiResponse });
+      reply.code(200).send({ success: true, ai: aiResponse });
+    } catch (err) {
+      console.error(`‼️ai comment analysis error: ‼️`, err);
+      reply.code(500).send({ error: "ai comment analysis failed" });
+    }
   });
 }

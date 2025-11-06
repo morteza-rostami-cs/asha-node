@@ -113,24 +113,6 @@ export async function llmStructuredTask({
     `
   );
 
-  // console.log("======================================**");
-  // console.log(`${promptTemplate}
-  //   \n\nRespond ONLY with a valid JSON object matching the format:\n
-  //   {formatInstructions}
-
-  //   If previous attempt failed, you may also receive an "error" message explaining what went wrong.
-  //   Use that info to fix the formatting or fill missing fields.
-
-  //   {error}
-  //   `);
-  // const promptTxt = await prompt.invoke({
-  //   ...formattedInput,
-  //   format_instructions: formatInstructions,
-  //   error: "",
-  // });
-  // console.log(promptTxt);
-  // return;
-
   const chain = RunnableSequence.from([prompt, llm]);
   const maxRetries = modelOptions.maxRetries ?? 3;
 
@@ -154,14 +136,10 @@ export async function llmStructuredTask({
       // parse and validate
       const parsed = await parser.parse(rawText);
 
-      console.log("************************");
-      console.log(parsed);
-      console.log("************************");
-
       // ✅ Final sanity check (avoid empty replies)
-      if (!parsed.reply || parsed.reply.trim() === "") {
-        throw new Error("Reply is empty, please generate a meaningful one.");
-      }
+      // if (!parsed.reply || parsed.reply.trim() === "") {
+      //   throw new Error("Reply is empty, please generate a meaningful one.");
+      // }
 
       return parsed;
     } catch (err) {
