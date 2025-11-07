@@ -99,7 +99,7 @@ export default async function aiCommentsRoutes(fastify, options) {
 
       const schema = z.object({
         approved: z.boolean(),
-        reason: z.string(),
+        reason: z.string().min(1, "Reason cannot be empty"), // ✅ never null/empty
         sentiment: z.enum(["positive", "negative", "neutral"]),
         title: z.string(),
       });
@@ -112,29 +112,47 @@ export default async function aiCommentsRoutes(fastify, options) {
       1. Decide if the comment should be **APPROVED** or **REJECTED**.
       2. Analyze the **sentiment** of the comment as "positive", "negative", or "neutral".
       3. Generate a short, natural **title** (max 6 words) summarizing the comment tone or topic.
+      4. Provide a short **reason** explaining why it was approved or rejected — never leave it null or empty.
 
       ### Rules:
       - **Approve** comments that are:
         - Polite, respectful — even if negative or critical.
-        - Expressing personal opinion, frustration, or disagreement in a civil way.
+        - Expressing frustration or disagreement without insults.
 
       - **Reject** comments that:
-        - Contain **insults**, **slurs**, **hate speech**, or **explicit profanity** (e.g. "fuck", "shit", "idiot", "bastard", etc.).
-        - Include **personal attacks**, threats, or demeaning language toward anyone.
+        - Contain **insults**, **hate speech**, **slurs**, or **explicit profanity**
+          (e.g. "fuck", "shit", "idiot", "bastard", etc.).
+        - Include **personal attacks**, **threats**, or demeaning language toward anyone.
 
       ### Examples:
-      - "This update ruined everything!" → APPROVE ✅ (negative but non-abusive)
-      - "You guys are idiots!" → REJECT 🚫 (insult)
-      - "I hate this plugin, it’s slow" → APPROVE ✅ (negative sentiment, but polite)
-      - "Great work, thanks!" → APPROVE ✅ (positive)
-      - "This is f***ing stupid" → REJECT 🚫 (contains profanity)
+      - "This update ruined everything!" → APPROVE ✅
+        - Sentiment: negative
+        - Title: "Critical feedback on update"
+        - Reason: "Negative but civil criticism."
+
+      - "You guys are idiots!" → REJECT 🚫
+        - Sentiment: negative
+        - Title: "Insulting language"
+        - Reason: "Contains personal insult."
+
+      - "I hate this plugin, it’s slow" → APPROVE ✅
+        - Sentiment: negative
+        - Title: "Performance complaint"
+        - Reason: "Critical but polite."
+
+      - "This is f***ing stupid" → REJECT 🚫
+        - Sentiment: negative
+        - Title: "Profanity detected"
+        - Reason: "Contains explicit profanity."
 
       ### Output format:
-      Respond **only** with a valid JSON object like this:
+      Respond **only** with a valid JSON object like this (do not include markdown):
+
       {{
         "approved": true,
-        "sentiment": "negative",
-        "title": "Critical feedback on update"
+        "sentiment": "neutral",
+        "title": "Constructive feedback summary",
+        "reason": "Polite and relevant comment."
       }}
 
       ### Comment to analyze:
