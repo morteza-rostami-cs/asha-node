@@ -91,6 +91,7 @@ export default async function aiCommentsRoutes(fastify, options) {
       // data
       const comment = request.body?.comment;
       const commentId = request.body?.commentId;
+      const userId = request.body?.userId;
 
       if (!comment && !commentId) {
         return reply.status(400).json({ error: "comment is required." });
@@ -105,25 +106,43 @@ export default async function aiCommentsRoutes(fastify, options) {
 
       // , relevant, or constructive irrelevant/spam,
       const promptTemplate = `
-      You are a WordPress AI moderator and analyzer.
+      You are a WordPress AI moderator and sentiment analyzer.
 
-      Your tasks:
-      1. Decide if the comment should be APPROVED or REJECTED.
-      2. Analyze the sentiment of the comment: "positive", "negative", or "neutral".
-      3. Generate a short human-readable TITLE (max 6 words) summarizing the comment.
+      ### Your tasks:
+      1. Decide if the comment should be **APPROVED** or **REJECTED**.
+      2. Analyze the **sentiment** of the comment as "positive", "negative", or "neutral".
+      3. Generate a short, natural **title** (max 6 words) summarizing the comment tone or topic.
 
-      Rules:
-      - Approve if the comment is polite.
-      - Reject if it contains hate, insults, or offensive language.
-      - Title should sound natural and related to the comment tone.
-      - Respond ONLY in the exact JSON format.
+      ### Rules:
+      - **Approve** comments that are:
+        - Polite, respectful — even if negative or critical.
+        - Expressing personal opinion, frustration, or disagreement in a civil way.
 
-      Comment:
+      - **Reject** comments that:
+        - Contain **insults**, **slurs**, **hate speech**, or **explicit profanity** (e.g. "fuck", "shit", "idiot", "bastard", etc.).
+        - Include **personal attacks**, threats, or demeaning language toward anyone.
+
+      ### Examples:
+      - "This update ruined everything!" → APPROVE ✅ (negative but non-abusive)
+      - "You guys are idiots!" → REJECT 🚫 (insult)
+      - "I hate this plugin, it’s slow" → APPROVE ✅ (negative sentiment, but polite)
+      - "Great work, thanks!" → APPROVE ✅ (positive)
+      - "This is f***ing stupid" → REJECT 🚫 (contains profanity)
+
+      ### Output format:
+      Respond **only** with a valid JSON object like this:
+      {{
+        "approved": true,
+        "sentiment": "negative",
+        "title": "Critical feedback on update"
+      }}
+
+      ### Comment to analyze:
       "{comment}"
       `;
 
       // notify react of analyzing status
-      sendToClient(commentId, { status: "analyzing" });
+      sendToClient(userId, { status: "analyzing" });
 
       const aiResponse = await llmStructuredTask({
         promptTemplate,
@@ -147,20 +166,43 @@ export default async function aiCommentsRoutes(fastify, options) {
       });
 
       // signal to client -> aiResponse ready -> so: fetch the comments again
-      if (wpRes.ok) sendToClient(commentId, { status: "done", commentId });
-
       if (!wpRes.ok) {
-        console.log("####### wp moderate store data failed. #######");
-        sendToClient(commentId, { status: "failed", commentId });
+        const text = await wpRes.text(); // read raw response body for debugging
+        console.error("❌ WP moderation request failed:", {
+          status: wpRes.status,
+          statusText: wpRes.statusText,
+          url: wpModerationUrl,
+          responseBody: text,
+        });
+
+        sendToClient(userId, {
+          status: "failed",
+          commentId,
+          error: `WordPress moderation failed (${wpRes.status})`,
+        });
+        return;
       }
 
       console.log("*************");
       console.log(aiResponse);
 
+      console.log("✅ WP moderation success for:", commentId);
+      sendToClient(userId, { status: "done", commentId });
+
       // res.json({ success: true, ai: aiResponse });
       reply.code(200).send({ success: true, ai: aiResponse });
     } catch (err) {
-      console.error(`‼️ai comment analysis error: ‼️`, err);
+      console.error("💥 WP moderation fetch crashed:", {
+        message: err.message,
+        stack: err.stack,
+        url: wpModerationUrl,
+      });
+
+      sendToClient(userId, {
+        status: "failed",
+        commentId,
+        error: `Network or server error: ${err.message}`,
+      });
       reply.code(500).send({ error: "ai comment analysis failed" });
     }
   });

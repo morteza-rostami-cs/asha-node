@@ -8,12 +8,12 @@ export const clients = new Map();
 /**
  * Send a message to a specific client.
  */
-export function sendToClient(commentId, data) {
-  const send = clients.get(commentId);
+export function sendToClient(userId, data) {
+  const send = clients.get(userId);
   console.log(
     "sending a message to client SSE****************",
     clients,
-    commentId,
+    userId,
     send
   );
   if (send) send(data);

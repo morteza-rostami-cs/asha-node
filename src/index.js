@@ -41,10 +41,10 @@ await app.register(aiCommentsRoutes, { prefix: api_v1 + "/ai-comments" });
 // sse connection route
 // /sse?commentId=abc123
 app.get("/sse", async (request, reply) => {
-  const commentId = request.query?.commentId;
+  const userId = request.query?.userId;
 
-  // only connects if there is a commentID
-  if (!commentId) return reply.code(400).send("missing commentId");
+  // only connects if there is a userId
+  if (!userId) return reply.code(400).send("missing userId");
 
   // set special headers required for SSE
   // raw.reply -> is underlying nodeJs http response
@@ -61,21 +61,21 @@ app.get("/sse", async (request, reply) => {
   // const send = clients.get('client1')
   // send({aiResponse: ""})
 
-  clients.set(commentId, send);
+  clients.set(userId, send);
 
-  console.log(`🧠 New SSE connection → ${commentId}`);
+  console.log(`🧠 New SSE connection → ${userId}`);
 
   // ✅ Send welcome message immediately
   send({
     type: "welcome",
-    message: `👋 Welcome client ${commentId}! You're now connected to the SSE stream.`,
+    message: `👋 Welcome client ${userId}! You're now connected to the SSE stream.`,
     time: new Date().toISOString(),
   });
 
   // when client closes connection -> remove from clients
   request.raw.on("close", () => {
-    console.log(`❌ Disconnected: ${commentId}`);
-    clients.delete(commentId);
+    console.log(`❌ Disconnected: ${userId}`);
+    clients.delete(userId);
   });
 });
 
