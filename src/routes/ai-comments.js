@@ -5,41 +5,12 @@ import {
 
 import safeJSONParse from "../helpers/safeJSONParse.js";
 import { z } from "zod";
+import { sendToClient } from "../helpers/clients.js";
 
 export default async function aiCommentsRoutes(fastify, options) {
   fastify.get("/", async (request, reply) => {
-    const prompt = `
-    You are an AI comment assistant.  
-    Analyze this comment and respond in a friendly way.
-
-    Comment: {comment}
-    Tone: {tone}
-    `;
-
-    await streamLLMResponse({
-      promptTemplate: prompt,
-      inputData: {
-        comment: "This plugin looks awesome!",
-        tone: "funny",
-      },
-      onChunk: (chunk) => process.stdout.write(chunk),
-      modelOptions: {
-        model: "gemma2:2b",
-        temperature: 0.8,
-      },
-    });
-
-    // POST /ai-comments/comment-analysis
-    /*
-    # input
-    {
-      "comment": "I think your plugin is too slow sometimes.",
-      "thread": [
-        { "author": "Admin", "text": "Thanks for your feedback!" },
-        { "author": "UserA", "text": "It works fine for me." }
-      ]
-    }
-    */
+    // send sse message
+    sendToClient("13", { status: "done" });
 
     return { message: "AI Comments route is working ✅" };
   });

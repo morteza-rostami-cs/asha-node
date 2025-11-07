@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import aiCommentsRoutes from "./routes/ai-comments.js";
 // config file
 import { config } from "./config/config.js";
+// import global value
+import { clients } from "./helpers/clients.js";
+import cors from "@fastify/cors"; // ✅ import plugin
 
 const app = Fastify({
   // logger: true, // logs all requests
@@ -20,13 +23,68 @@ const app = Fastify({
 const api_v1 = "/api/v1";
 const port = config.port;
 
+// ✅ Register CORS plugin BEFORE routes
+await app.register(cors, {
+  origin: ["http://localhost:5173"], // your React app
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+});
+
 // register routes
-app.register(aiCommentsRoutes, { prefix: api_v1 + "/ai-comments" });
+await app.register(aiCommentsRoutes, { prefix: api_v1 + "/ai-comments" });
+
+// map of connected clients, identify with their commentId
+// so, basically each client gets it's own stream based on commentId
+// const clients = new Map();
+
+// sse connection route
+// /sse?commentId=abc123
+app.get("/sse", async (request, reply) => {
+  const commentId = request.query?.commentId;
+
+  // only connects if there is a commentID
+  if (!commentId) return reply.code(400).send("missing commentId");
+
+  // set special headers required for SSE
+  // raw.reply -> is underlying nodeJs http response
+  reply.raw.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "Access-Control-Allow-Origin": "http://localhost:5173",
+    "Access-Control-Allow-Credentials": "true",
+  });
+
+  // a function that server can call for each client -> and send message to client
+  const send = (data) => reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+  // const send = clients.get('client1')
+  // send({aiResponse: ""})
+
+  clients.set(commentId, send);
+
+  console.log(`🧠 New SSE connection → ${commentId}`);
+
+  // ✅ Send welcome message immediately
+  send({
+    type: "welcome",
+    message: `👋 Welcome client ${commentId}! You're now connected to the SSE stream.`,
+    time: new Date().toISOString(),
+  });
+
+  // when client closes connection -> remove from clients
+  request.raw.on("close", () => {
+    console.log(`❌ Disconnected: ${commentId}`);
+    clients.delete(commentId);
+  });
+});
 
 // start the server
 const start = async () => {
   try {
     // const port = process.env.PORT || 5001;
+    // ✅ wait until all plugins are ready
+    await app.ready();
     await app.listen({ port, host: "0.0.0.0" });
     app.log.info(`🚀 Fastify server running on http://localhost:${port}`);
   } catch (err) {
