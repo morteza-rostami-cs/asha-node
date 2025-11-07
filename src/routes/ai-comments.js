@@ -6,6 +6,7 @@ import {
 import safeJSONParse from "../helpers/safeJSONParse.js";
 import { z } from "zod";
 import { sendToClient } from "../helpers/clients.js";
+import { config } from "../config/config.js";
 
 export default async function aiCommentsRoutes(fastify, options) {
   fastify.get("/", async (request, reply) => {
@@ -89,8 +90,9 @@ export default async function aiCommentsRoutes(fastify, options) {
     try {
       // data
       const comment = request.body?.comment;
+      const commentId = request.body?.commentId;
 
-      if (!comment) {
+      if (!comment && !commentId) {
         return reply.status(400).json({ error: "comment is required." });
       }
 
@@ -101,7 +103,7 @@ export default async function aiCommentsRoutes(fastify, options) {
         title: z.string(),
       });
 
-      // , relevant, or constructive irrelevant/
+      // , relevant, or constructive irrelevant/spam,
       const promptTemplate = `
       You are a WordPress AI moderator and analyzer.
 
@@ -111,15 +113,17 @@ export default async function aiCommentsRoutes(fastify, options) {
       3. Generate a short human-readable TITLE (max 6 words) summarizing the comment.
 
       Rules:
-      - Approve if the comment is polite, relevant, or constructive.
-      - Reject if it contains hate, spam, insults, or offensive language.
+      - Approve if the comment is polite.
+      - Reject if it contains hate, insults, or offensive language.
       - Title should sound natural and related to the comment tone.
       - Respond ONLY in the exact JSON format.
-
 
       Comment:
       "{comment}"
       `;
+
+      // notify react of analyzing status
+      sendToClient(commentId, { status: "analyzing" });
 
       const aiResponse = await llmStructuredTask({
         promptTemplate,
@@ -132,6 +136,26 @@ export default async function aiCommentsRoutes(fastify, options) {
           maxRetries: 3,
         },
       });
+
+      // call wp to store, title , sentiment, approved
+      const wpModerationUrl = config.wp.apiUrl + "/ai-comments/v1/moderation";
+
+      const wpRes = await fetch(wpModerationUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, ...aiResponse }),
+      });
+
+      // signal to client -> aiResponse ready -> so: fetch the comments again
+      if (wpRes.ok) sendToClient(commentId, { status: "done", commentId });
+
+      if (!wpRes.ok) {
+        console.log("####### wp moderate store data failed. #######");
+        sendToClient(commentId, { status: "failed", commentId });
+      }
+
+      console.log("*************");
+      console.log(aiResponse);
 
       // res.json({ success: true, ai: aiResponse });
       reply.code(200).send({ success: true, ai: aiResponse });

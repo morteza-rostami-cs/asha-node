@@ -38,6 +38,10 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
   },
+
+  wp: {
+    apiUrl: isProd ? process.env.WP_API_URL_PROD : process.env.WP_API_URL_DEV,
+  },
 };
 
 console.log(
