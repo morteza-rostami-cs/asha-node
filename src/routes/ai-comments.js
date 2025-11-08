@@ -160,7 +160,7 @@ export default async function aiCommentsRoutes(fastify, options) {
       `;
 
       // notify react of analyzing status
-      sendToClient(userId, { status: "analyzing" });
+      sendToClient(userId, { status: "analyzing", commentId });
 
       const aiResponse = await llmStructuredTask({
         promptTemplate,
